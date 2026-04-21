@@ -11,9 +11,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@midnight-ntwrk/dapp-connector-api": "^3.0.0",
+    "@midnight-ntwrk/midnight-js-network-id": "2.0.2",
     "@tailwindcss/vite": "^4.2.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "rxjs": "^7.8.2",
+    "semver": "^7.7.4",
     "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
@@ -22,6 +26,7 @@
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/semver": "^7.7.1",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
