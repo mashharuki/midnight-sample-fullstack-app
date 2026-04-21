@@ -32,3 +32,4 @@ You must do under `app` folder.
 - Lace Wallet
 - MidNight
 - PreProd
+- Biome

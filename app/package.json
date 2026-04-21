@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "format": "bunx biome format --write .",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
@@ -16,6 +17,7 @@
     "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.12",
     "@eslint/js": "^9.39.4",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
