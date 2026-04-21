@@ -1,0 +1,388 @@
+{
+  "version": "2.11",
+  "children": [
+    {
+      "type": "frame",
+      "id": "gBjxt",
+      "x": 0,
+      "y": 0,
+      "name": "1 - Disconnected",
+      "clip": true,
+      "width": 1280,
+      "height": 720,
+      "fill": "#0a0a0f",
+      "children": [
+        {
+          "type": "frame",
+          "id": "cZZob",
+          "name": "ctr1",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 28,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "3UwLd",
+              "name": "icon1",
+              "fill": "#f8fafc",
+              "content": "🌑",
+              "fontFamily": "Inter",
+              "fontSize": 56,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "Ughe2",
+              "name": "ttl1",
+              "fill": "#f8fafc",
+              "content": "Midnight dApp",
+              "fontFamily": "Inter",
+              "fontSize": 38,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "7NNC7",
+              "name": "sub1",
+              "fill": "#94a3b8",
+              "textGrowth": "fixed-width",
+              "width": 480,
+              "content": "Connect your Lace Wallet to access the Midnight Network",
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "02Ivy",
+              "name": "btn1",
+              "fill": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 270,
+                "size": {
+                  "height": 1
+                },
+                "colors": [
+                  {
+                    "color": "#7c3aed",
+                    "position": 0
+                  },
+                  {
+                    "color": "#a855f7",
+                    "position": 1
+                  }
+                ]
+              },
+              "cornerRadius": 8,
+              "padding": [
+                14,
+                28
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "jEiPY",
+                  "name": "bLbl1",
+                  "fill": "#ffffff",
+                  "content": "Connect Lace Wallet",
+                  "fontFamily": "Inter",
+                  "fontSize": 16,
+                  "fontWeight": "600"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "l6aNc",
+      "x": 1360,
+      "y": 0,
+      "name": "2 - Connecting",
+      "clip": true,
+      "width": 1280,
+      "height": 720,
+      "fill": "#0a0a0f",
+      "children": [
+        {
+          "type": "frame",
+          "id": "oKLyD",
+          "name": "ctr2",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 28,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "yQvVV",
+              "name": "icon2",
+              "fill": "#f8fafc",
+              "content": "🌑",
+              "fontFamily": "Inter",
+              "fontSize": 56,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "zucik",
+              "name": "ttl2",
+              "fill": "#f8fafc",
+              "content": "Midnight dApp",
+              "fontFamily": "Inter",
+              "fontSize": 38,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "0moTC",
+              "name": "sub2",
+              "fill": "#94a3b8",
+              "textGrowth": "fixed-width",
+              "width": 480,
+              "content": "Connect your Lace Wallet to access the Midnight Network",
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "vg1w0",
+              "name": "btn2",
+              "opacity": 0.8,
+              "fill": "#5b21b6",
+              "cornerRadius": 8,
+              "gap": 10,
+              "padding": [
+                14,
+                28
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "i4LIa",
+                  "name": "spin2",
+                  "fill": "#c4b5fd",
+                  "content": "◌",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "fW2OC",
+                  "name": "bLbl2",
+                  "fill": "#c4b5fd",
+                  "content": "Connecting...",
+                  "fontFamily": "Inter",
+                  "fontSize": 16,
+                  "fontWeight": "600"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "npH7W",
+      "x": 2720,
+      "y": 0,
+      "name": "3 - Connected",
+      "clip": true,
+      "width": 1280,
+      "height": 720,
+      "fill": "#0a0a0f",
+      "children": [
+        {
+          "type": "frame",
+          "id": "BY0Rr",
+          "name": "ctr3",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "FgcHI",
+              "name": "card3",
+              "width": 600,
+              "fill": "#12121a",
+              "cornerRadius": 16,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#1e1e2e"
+              },
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#a855f730",
+                "blur": 32
+              },
+              "layout": "vertical",
+              "gap": 24,
+              "padding": 40,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "MyJSM",
+                  "name": "hdr3",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "7aoxI",
+                      "name": "badge3",
+                      "fill": "#0c2a2a",
+                      "cornerRadius": 20,
+                      "gap": 6,
+                      "padding": [
+                        6,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "HCDPr",
+                          "name": "dot3",
+                          "fill": "#22d3ee",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "aYwUW",
+                          "name": "badgeTxt3",
+                          "fill": "#22d3ee",
+                          "content": "Connected",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Wv7Ev",
+                      "name": "net3",
+                      "fill": "#1a1226",
+                      "cornerRadius": 6,
+                      "padding": [
+                        5,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "1LxUv",
+                          "name": "netTxt3",
+                          "fill": "#a855f7",
+                          "content": "PreProd Testnet",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "7BVko",
+                  "name": "addrRow3",
+                  "width": "fill_container",
+                  "fill": "#0d0d18",
+                  "cornerRadius": 8,
+                  "padding": [
+                    14,
+                    18
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BVLWB",
+                      "name": "addrTxt3",
+                      "fill": "#e2e8f0",
+                      "content": "addr1xy...z2ab...c1d9",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "qlWpj",
+                      "name": "copyIcon3",
+                      "width": 18,
+                      "height": 18,
+                      "iconFontName": "copy",
+                      "iconFontFamily": "lucide",
+                      "fill": "#94a3b8"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "z1D6n",
+                  "name": "addrLbl3",
+                  "fill": "#64748b",
+                  "content": "Shielded Address",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "gc8xi",
+                  "name": "discRow3",
+                  "padding": [
+                    8,
+                    0
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "zALUc",
+                      "name": "discTxt3",
+                      "fill": "#64748b",
+                      "content": "Disconnect Wallet",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
