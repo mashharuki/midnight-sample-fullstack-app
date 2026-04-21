@@ -100,42 +100,35 @@ export async function connectToWallet(logger?: Logger): Promise<{
     );
   }
 
-  // Step 3: enable/connect
-  const api = await firstValueFrom(
-    of(connectorAPI).pipe(
-      concatMap(async (api) => {
-        await api.isEnabled(); // 起動確認
-        return api.enable();   // 許可ダイアログ
-      }),
-      timeout({ first: 15_000 }),
-    ),
-  );
-
-  // Step 4: Lace v4 (connect(networkId) API) を試みる
+  // Step 3: connect
+  // ⚠️ Lace v4 (4.0.0+): isEnabled() と enable() は存在しない。
+  // connectorAPI 自身に connect(networkId) が直接生えている。
+  // 旧スキルの「enable() → api.connect()」パターンは v4 では動作しない。
+  const raw = connectorAPI as any;
   let walletConnectorAPI: DAppConnectorWalletAPI | null = null;
   let uris: ServiceUriConfig | null = null;
+  const candidates = ['preprod', 'mainnet', 'undeployed', 'preview'];
 
-  if (typeof (api as any).connect === 'function') {
-    const v4Api = api as any;
-    const candidates = ['preprod', 'mainnet', 'undeployed', 'preview'];
+  if (typeof raw.connect === 'function') {
+    // Lace v4: connectorAPI.connect(networkId) 直接呼び出し
     let lastError: unknown;
     for (const networkId of candidates) {
       try {
-        const result = await v4Api.connect(networkId);
-        walletConnectorAPI = result;
-        const config = await v4Api.getConfiguration();
-        uris = {
-          indexerUri:      config.indexerUri ?? config.indexerUrl ?? '',
-          indexerWsUri:    config.indexerWsUri ?? config.indexerWsUrl ?? config.indexerWebSocketUrl ?? '',
-          proverServerUri: config.proverServerUri ?? config.proofServerUri ?? config.proverUri ?? config.proofServerUrl ?? '',
-          substrateNodeUri:config.substrateNodeUri ?? config.nodeUri ?? config.substrateUri ?? '',
-        };
+        walletConnectorAPI = await raw.connect(networkId);
+        if (typeof raw.getConfiguration === 'function') {
+          const config = await raw.getConfiguration();
+          uris = {
+            indexerUri:      config.indexerUri ?? config.indexerUrl ?? '',
+            indexerWsUri:    config.indexerWsUri ?? config.indexerWsUrl ?? config.indexerWebSocketUrl ?? '',
+            proverServerUri: config.proverServerUri ?? config.proofServerUri ?? config.proverUri ?? config.proofServerUrl ?? '',
+            substrateNodeUri:config.substrateNodeUri ?? config.nodeUri ?? config.substrateUri ?? '',
+          };
+        }
         break;
       } catch (e: unknown) {
         lastError = e;
         const reason = (e as any)?.reason ?? (e as any)?.message ?? String(e);
-        // ネットワーク不一致以外のエラー（ユーザー拒否など）は即中断
-        if (!reason.includes('mismatch') && !reason.includes('Unsupported')) break;
+        if (!reason.toLowerCase().includes('mismatch') && !reason.toLowerCase().includes('unsupported')) break;
       }
     }
     if (!walletConnectorAPI) {
@@ -145,18 +138,45 @@ export async function connectToWallet(logger?: Logger): Promise<{
         `Please check Lace Settings → Midnight network.`
       );
     }
+  } else if (typeof raw.enable === 'function') {
+    // Legacy: enable() → optional connect() on enabled API
+    const enabledAPI = await raw.enable();
+    if (typeof enabledAPI.connect === 'function') {
+      let lastError: unknown;
+      for (const networkId of candidates) {
+        try {
+          walletConnectorAPI = await enabledAPI.connect(networkId);
+          break;
+        } catch (e: unknown) {
+          lastError = e;
+          const reason = (e as any)?.reason ?? (e as any)?.message ?? String(e);
+          if (!reason.toLowerCase().includes('mismatch') && !reason.toLowerCase().includes('unsupported')) break;
+        }
+      }
+    } else {
+      walletConnectorAPI = enabledAPI as unknown as DAppConnectorWalletAPI;
+    }
   } else {
-    // レガシー v1 フォールバック
-    walletConnectorAPI = api as unknown as DAppConnectorWalletAPI;
-    uris = {
-      indexerUri: 'https://indexer.testnet-02.midnight.network/api/v1/graphql',
-      indexerWsUri: 'wss://indexer.testnet-02.midnight.network/api/v1/graphql/ws',
-      proverServerUri: 'http://127.0.0.1:6300',
-      substrateNodeUri: '',
-    };
+    throw new Error('Unsupported Lace Wallet API: neither connect() nor enable() found.');
   }
 
-  return { wallet: walletConnectorAPI, uris: uris! };
+  if (!walletConnectorAPI) {
+    throw new Error(
+      `Cannot connect to Midnight Lace wallet. ` +
+      `Tried networks: ${candidates.join(', ')}. ` +
+      `Please check Lace Settings → Midnight network.`
+    );
+  }
+
+  // フォールバック URI（getConfiguration が存在しない場合）
+  uris ??= {
+    indexerUri: 'https://indexer.testnet-02.midnight.network/api/v1/graphql',
+    indexerWsUri: 'wss://indexer.testnet-02.midnight.network/api/v1/graphql/ws',
+    proverServerUri: 'http://127.0.0.1:6300',
+    substrateNodeUri: '',
+  };
+
+  return { wallet: walletConnectorAPI, uris };
 }
 ```
 
@@ -166,18 +186,30 @@ export async function connectToWallet(logger?: Logger): Promise<{
 
 ## 3. ウォレット状態の取得
 
-```typescript
-import type { DAppConnectorWalletState } from '@midnight-ntwrk/dapp-connector-api';
+> ⚠️ **Lace v4 (4.0.0+) では `wallet.state()` は存在しない。**
+> `getShieldedAddresses()` を使用すること。
 
-const reqState: DAppConnectorWalletState = await wallet.state();
-// {
-//   address: string;             // シールドアドレス
-//   coinPublicKey: string;       // コイン公開鍵
-//   encryptionPublicKey: string; // 暗号化公開鍵
-// }
+```typescript
+// ✅ Lace v4 正しい方法
+// 戻り値は配列ではなく単一オブジェクト。フィールド名は shielded プレフィックス付き。
+// { shieldedAddress, shieldedCoinPublicKey, shieldedEncryptionPublicKey }
+const result = await walletAPI.getShieldedAddresses();
+const entry = Array.isArray(result) ? result[0] : result;
+const address = entry?.shieldedAddress ?? entry?.address ?? '';
+const coinPublicKey = entry?.shieldedCoinPublicKey ?? entry?.coinPublicKey ?? '';
+const encryptionPublicKey = entry?.shieldedEncryptionPublicKey ?? entry?.encryptionPublicKey ?? '';
+
+// ❌ Lace v4 では動作しない（legacy のみ）
+// const reqState = await wallet.state();
 ```
 
-Lace v4 の場合は `getShieldedAddresses()` も利用可能：
+また、`getConfiguration()` も **walletAPI 側**に存在する（connectToWallet の connector 側ではない）：
+
+```typescript
+const cfg = await walletAPI.getConfiguration();
+```
+
+Lace v4 の場合は `getShieldedAddresses()` も利用可能（上記と同一）：
 
 ```typescript
 const addresses = await v4Api.getShieldedAddresses();
@@ -383,8 +415,8 @@ export const WalletProvider: React.FC<{ networkId: string; children: React.React
 
   const connect = async () => {
     const result = await connectToWallet();
-    const state = await result.wallet.state();
-    setAddress(state.address);
+    // Lace v4: address is already in result.state (populated from getShieldedAddresses)
+    setAddress(result.state.address);
     setWalletAPI(result);
   };
 
