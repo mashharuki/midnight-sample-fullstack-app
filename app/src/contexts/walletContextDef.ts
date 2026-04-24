@@ -1,16 +1,11 @@
+import type {
+  WalletConnectionResult,
+  WalletContextValue,
+  WalletState,
+} from "@/utils/types";
 import { createContext } from "react";
-import type { WalletConnectionResult } from "@/lib/wallet";
 
-export type WalletState =
-  | { status: "disconnected" }
-  | { status: "connecting" }
-  | { status: "connected"; connection: WalletConnectionResult }
-  | { status: "error" };
+export type { WalletConnectionResult, WalletContextValue, WalletState };
 
-export interface WalletContextValue {
-  state: WalletState;
-  connect: () => Promise<void>;
-  disconnect: () => void;
-}
-
+// null をデフォルト値にし、Provider 外での誤用を useWallet() の guard で検出する
 export const WalletContext = createContext<WalletContextValue | null>(null);

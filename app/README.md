@@ -1,73 +1,86 @@
-# React + TypeScript + Vite
+# Midnight dApp — フロントエンド
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Midnight Network (PreProd) に接続するサンプル dApp のフロントエンドです。  
+Lace Wallet を使ってウォレット接続・シールドアドレス表示・残高確認ができます。
 
-Currently, two official plugins are available:
+## 機能概要
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| 機能 | 説明 |
+|---|---|
+| Lace Wallet 接続 | `window.midnight.mnLace` を 100ms ポーリングで検出し接続 |
+| バージョン検証 | Connector API バージョンが `>=1.0.0` か確認 |
+| ネットワーク検証 | PreProd / mainnet / undeployed / preview の順に自動試行 |
+| アドレス表示 | シールドアドレスをコピー可能な形式で表示 |
+| 残高表示 | Shielded / Unshielded / Dust の 3 種を tDUST 単位で表示 |
+| 言語切り替え | 右上ボタンで日本語 ⇆ English を即時切り替え（localStorage 永続化） |
 
-## React Compiler
+## 技術スタック
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| カテゴリ | ライブラリ / ツール |
+|---|---|
+| フレームワーク | React 19 + TypeScript |
+| ビルド | Vite 8 |
+| スタイリング | Tailwind CSS v4 (`@tailwindcss/vite`) |
+| UI コンポーネント | shadcn/ui (Button, Badge, Card) + Lucide React |
+| 国際化 | i18next 26 + react-i18next 17 |
+| ウォレット連携 | `@midnight-ntwrk/dapp-connector-api` |
+| 非同期処理 | RxJS 7 |
+| パッケージマネージャー | Bun |
+| フォーマッター | Biome |
 
-## Expanding the ESLint configuration
+## ディレクトリ構成
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+├── App.tsx                     # ルートコンポーネント（接続状態で画面切替）
+├── main.tsx                    # エントリーポイント
+├── components/
+│   ├── ConnectSection.tsx      # 未接続時のランディング画面
+│   ├── AddressCard.tsx         # 接続後のウォレット情報カード
+│   ├── LanguageToggle.tsx      # 右上固定の言語切り替えボタン
+│   └── ui/                    # shadcn/ui 基本コンポーネント
+├── contexts/
+│   ├── WalletContext.tsx       # ウォレット状態管理プロバイダー
+│   ├── walletContextDef.ts    # Context 型定義
+│   └── useWallet.ts           # useWallet フック
+├── hooks/
+│   └── useBalance.ts          # 残高取得フック
+├── i18n/
+│   ├── index.ts               # i18next 初期化（デフォルト: 日本語）
+│   └── locales/
+│       ├── ja.ts              # 日本語翻訳
+│       └── en.ts              # 英語翻訳
+├── lib/
+│   ├── wallet.ts              # Lace 接続ロジック・エラークラス群
+│   └── utils.ts               # Tailwind クラス結合ユーティリティ
+└── utils/
+    ├── constants.ts           # ネットワーク設定・通貨単位等の定数
+    └── types.ts               # 共通型定義
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## セットアップ
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+bun install
+bun run dev      # 開発サーバー起動 (http://localhost:5173)
+bun run build    # 本番ビルド → dist/
+bun run preview  # dist/ をローカルプレビュー
+bun run lint     # ESLint 実行
+bun run format   # Biome フォーマット
 ```
+
+## 前提条件
+
+- [Lace Wallet](https://www.lace.io/) ブラウザ拡張機能（Midnight 対応版）をインストール済みであること
+- Lace の設定で **PreProd** ネットワークが選択されていること
+- ZK 証明が必要な操作を行う場合は Proof Server（ポート 6300）を起動すること
+
+```bash
+# プロジェクトルートから Midnight ローカルインフラを起動する場合
+docker compose -f standalone.yml up -d
+```
+
+## 環境変数
+
+現在、必須の環境変数はありません。  
+Indexer / Node の URI は Lace Wallet から自動取得し、取得できない場合は `src/utils/constants.ts` の `FALLBACK_URIS`（testnet-02）にフォールバックします。
