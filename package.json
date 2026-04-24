@@ -1,0 +1,23 @@
+{
+  "name": "midnight-sample-fullstack-app",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "bun@1.2.0",
+  "workspaces": [
+    "pkgs/*"
+  ],
+  "scripts": {
+    "app": "bun run --cwd pkgs/app",
+    "cli": "bun run --cwd pkgs/cli",
+    "contract": "bun run --cwd pkgs/contract",
+    "dev": "bun run --cwd pkgs/app dev",
+    "build": "bun run --cwd pkgs/contract build && bun run --cwd pkgs/cli build && bun run --cwd pkgs/app build",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "bun run --cwd pkgs/contract test",
+    "typecheck": "bun run --cwd pkgs/app build && bun run --cwd pkgs/cli typecheck && bun run --cwd pkgs/contract build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12"
+  }
+}
