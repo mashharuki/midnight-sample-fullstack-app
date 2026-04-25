@@ -1,4 +1,4 @@
-pragma language_version >= 0.16 && <= 0.25;
+pragma language_version >= 0.16 && <= 0.30;
 import CompactStandardLibrary;
 
 // public state (公開台帳に保存される状態)

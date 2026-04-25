@@ -13,58 +13,64 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import * as CompactJs from "@midnight-ntwrk/compact-js";
+import * as fs from "node:fs";
+import * as fsAsync from "node:fs/promises";
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { type ContractAddress } from "@midnight-ntwrk/compact-runtime";
-import { Counter, type CounterPrivateState, witnesses } from "contract";
+import { nativeToken } from "@midnight-ntwrk/ledger";
 import {
-  type CoinInfo,
-  nativeToken,
+  type CoinPublicKey,
+  type EncPublicKey,
+  type FinalizedTransaction,
   Transaction,
-  type TransactionId,
-} from "@midnight-ntwrk/ledger";
+} from "@midnight-ntwrk/ledger-v8";
 import {
   deployContract,
   findDeployedContract,
 } from "@midnight-ntwrk/midnight-js-contracts";
 import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
+import { levelPrivateStateProvider } from "@midnight-ntwrk/midnight-js-level-private-state-provider";
+import { getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import { NodeZkConfigProvider } from "@midnight-ntwrk/midnight-js-node-zk-config-provider";
 import {
-  type BalancedTransaction,
-  createBalancedTx,
   type FinalizedTxData,
   type MidnightProvider,
-  type UnbalancedTransaction,
+  type UnboundTransaction,
   type WalletProvider,
 } from "@midnight-ntwrk/midnight-js-types";
+import {
+  assertIsContractAddress,
+  toHex,
+} from "@midnight-ntwrk/midnight-js-utils";
 import { type Resource, WalletBuilder } from "@midnight-ntwrk/wallet";
 import { type Wallet } from "@midnight-ntwrk/wallet-api";
-import { Transaction as ZswapTransaction } from "@midnight-ntwrk/zswap";
+import { NetworkId as ZswapNetworkId, Transaction as ZswapTransaction } from "@midnight-ntwrk/zswap";
+import { Counter, type CounterPrivateState } from "contract";
 import { webcrypto } from "crypto";
 import { type Logger } from "pino";
 import * as Rx from "rxjs";
 import { WebSocket } from "ws";
+import { type Config, contractConfig } from "./config";
 import {
   type CounterContract,
   type CounterPrivateStateId,
   type CounterProviders,
   type DeployedCounterContract,
 } from "./utils/common-types";
-import { type Config, contractConfig } from "./config";
-import { levelPrivateStateProvider } from "@midnight-ntwrk/midnight-js-level-private-state-provider";
-import {
-  assertIsContractAddress,
-  toHex,
-} from "@midnight-ntwrk/midnight-js-utils";
-import {
-  getLedgerNetworkId,
-  getZswapNetworkId,
-} from "@midnight-ntwrk/midnight-js-network-id";
-import * as fsAsync from "node:fs/promises";
-import * as fs from "node:fs";
 
 let logger: Logger;
+
+const toZswapNetworkId = (id: string): ZswapNetworkId => {
+  switch (id) {
+    case "TestNet": return ZswapNetworkId.TestNet;
+    case "DevNet": return ZswapNetworkId.DevNet;
+    case "MainNet": return ZswapNetworkId.MainNet;
+    default: return ZswapNetworkId.Undeployed;
+  }
+};
 // Instead of setting globalThis.crypto which is read-only, we'll ensure crypto is available
 // but won't try to overwrite the global property
 // @ts-expect-error: It's needed to enable WebSocket usage through apollo
@@ -79,14 +85,20 @@ export const getCounterLedgerState = async (
   const state = await providers.publicDataProvider
     .queryContractState(contractAddress)
     .then((contractState) =>
-      contractState != null ? Counter.ledger(contractState.data).round : null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      contractState != null ? Counter.ledger(contractState.data as any).round : null,
     );
   logger.info(`Ledger state: ${state}`);
   return state;
 };
 
-export const counterContractInstance: CounterContract = new Counter.Contract(
-  witnesses,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const counterContractInstance: CounterContract = (CompactJs.CompiledContract.make(
+  "counter",
+  Counter.Contract as any,
+) as any).pipe(
+  CompactJs.CompiledContract.withVacantWitnesses,
+  (CompactJs.CompiledContract.withCompiledFileAssets as any)(contractConfig.zkConfigPath),
 );
 
 export const joinContract = async (
@@ -95,10 +107,10 @@ export const joinContract = async (
 ): Promise<DeployedCounterContract> => {
   const counterContract = await findDeployedContract(providers, {
     contractAddress,
-    contract: counterContractInstance,
+    compiledContract: counterContractInstance,
     privateStateId: "counterPrivateState",
     initialPrivateState: { privateCounter: 0 },
-  });
+  } as any);
   logger.info(
     `Joined contract at address: ${counterContract.deployTxData.public.contractAddress}`,
   );
@@ -111,10 +123,10 @@ export const deploy = async (
 ): Promise<DeployedCounterContract> => {
   logger.info("Deploying counter contract...");
   const counterContract = await deployContract(providers, {
-    contract: counterContractInstance,
+    compiledContract: counterContractInstance,
     privateStateId: "counterPrivateState",
     initialPrivateState: privateState,
-  });
+  } as any);
   logger.info(
     `Deployed contract at address: ${counterContract.deployTxData.public.contractAddress}`,
   );
@@ -125,7 +137,7 @@ export const increment = async (
   counterContract: DeployedCounterContract,
 ): Promise<FinalizedTxData> => {
   logger.info("Incrementing...");
-  const finalizedTxData = await counterContract.callTx.increment();
+  const finalizedTxData = await (counterContract.callTx.increment as any)();
   logger.info(
     `Transaction ${finalizedTxData.public.txId} added in block ${finalizedTxData.public.blockHeight}`,
   );
@@ -151,31 +163,32 @@ export const createWalletAndMidnightProvider = async (
 ): Promise<WalletProvider & MidnightProvider> => {
   const state = await Rx.firstValueFrom(wallet.state());
   return {
-    coinPublicKey: state.coinPublicKey,
-    encryptionPublicKey: state.encryptionPublicKey,
-    balanceTx(
-      tx: UnbalancedTransaction,
-      newCoins: CoinInfo[],
-    ): Promise<BalancedTransaction> {
-      return wallet
-        .balanceTransaction(
-          ZswapTransaction.deserialize(
-            tx.serialize(getLedgerNetworkId()),
-            getZswapNetworkId(),
-          ),
-          newCoins,
-        )
-        .then((tx) => wallet.proveTransaction(tx))
-        .then((zswapTx) =>
-          Transaction.deserialize(
-            zswapTx.serialize(getZswapNetworkId()),
-            getLedgerNetworkId(),
-          ),
-        )
-        .then(createBalancedTx);
+    getCoinPublicKey(): CoinPublicKey {
+      return state.coinPublicKey;
     },
-    submitTx(tx: BalancedTransaction): Promise<TransactionId> {
-      return wallet.submitTransaction(tx);
+    getEncryptionPublicKey(): EncPublicKey {
+      return state.encryptionPublicKey;
+    },
+    async balanceTx(
+      tx: UnboundTransaction,
+      _ttl?: Date,
+    ): Promise<FinalizedTransaction> {
+      const networkId = toZswapNetworkId(getNetworkId());
+      const zswapTx = ZswapTransaction.deserialize(tx.serialize(), networkId);
+      const recipe = await wallet.balanceTransaction(zswapTx, []);
+      const provedZswapTx = await wallet.proveTransaction(recipe);
+      const bytes = provedZswapTx.serialize(networkId);
+      return Transaction.deserialize(
+        "signature",
+        "proof",
+        "binding",
+        bytes,
+      ) as FinalizedTransaction;
+    },
+    async submitTx(tx: FinalizedTransaction): Promise<string> {
+      const networkId = toZswapNetworkId(getNetworkId());
+      const zswapTx = ZswapTransaction.deserialize(tx.serialize(), networkId);
+      return wallet.submitTransaction(zswapTx) as Promise<string>;
     },
   };
 };
@@ -278,7 +291,7 @@ export const buildWalletAndWaitForFunds = async (
             proofServer,
             node,
             seed,
-            getZswapNetworkId(),
+            toZswapNetworkId(getNetworkId()),
             "info",
           );
           wallet.start();
@@ -304,7 +317,7 @@ export const buildWalletAndWaitForFunds = async (
               proofServer,
               node,
               seed,
-              getZswapNetworkId(),
+              toZswapNetworkId(getNetworkId()),
               "info",
             );
             wallet.start();
@@ -327,7 +340,7 @@ export const buildWalletAndWaitForFunds = async (
           proofServer,
           node,
           seed,
-          getZswapNetworkId(),
+          toZswapNetworkId(getNetworkId()),
           "info",
         );
         wallet.start();
@@ -340,7 +353,7 @@ export const buildWalletAndWaitForFunds = async (
         proofServer,
         node,
         seed,
-        getZswapNetworkId(),
+        toZswapNetworkId(getNetworkId()),
         "info",
       );
       wallet.start();
@@ -355,7 +368,7 @@ export const buildWalletAndWaitForFunds = async (
       proofServer,
       node,
       seed,
-      getZswapNetworkId(),
+      toZswapNetworkId(getNetworkId()),
       "info",
     );
     wallet.start();
@@ -391,10 +404,13 @@ export const configureProviders = async (
 ) => {
   const walletAndMidnightProvider =
     await createWalletAndMidnightProvider(wallet);
+  const walletState = await Rx.firstValueFrom(wallet.state());
   return {
     privateStateProvider: levelPrivateStateProvider<
       typeof CounterPrivateStateId
     >({
+      privateStoragePasswordProvider: async () => "midnight-counter-password",
+      accountId: walletState.address,
       privateStateStoreName: contractConfig.privateStateStoreName,
     }),
     publicDataProvider: indexerPublicDataProvider(
@@ -404,7 +420,7 @@ export const configureProviders = async (
     zkConfigProvider: new NodeZkConfigProvider<"increment">(
       contractConfig.zkConfigPath,
     ),
-    proofProvider: httpClientProofProvider(config.proofServer),
+    proofProvider: httpClientProofProvider(config.proofServer, new NodeZkConfigProvider<"increment">(contractConfig.zkConfigPath)),
     walletProvider: walletAndMidnightProvider,
     midnightProvider: walletAndMidnightProvider,
   };

@@ -1,13 +1,13 @@
 import { createCounterProviders } from "@/lib/providers";
 import {
+  connectToWallet,
   NetworkMismatchError,
   UserRejectedError,
   VersionMismatchError,
   WalletNotFoundError,
   WalletTimeoutError,
-  connectToWallet,
 } from "@/lib/wallet";
-import { NetworkId, setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
+import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import i18next from "i18next";
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -30,10 +30,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   // ネットワーク ID をグローバルに設定する（環境変数 VITE_NETWORK_ID で切替可能）
   useEffect(() => {
-    const id = import.meta.env.VITE_NETWORK_ID ?? "TestNet";
-    const networkId =
-      NetworkId[id as keyof typeof NetworkId] ?? NetworkId.TestNet;
-    setNetworkId(networkId);
+    const id: string = import.meta.env.VITE_NETWORK_ID ?? "TestNet";
+    setNetworkId(id);
   }, []);
 
   /**

@@ -10,19 +10,17 @@ import wasm from "vite-plugin-wasm";
 
 const _require = createRequire(import.meta.url);
 
-// Resolve compact-runtime dist directory
-const compactRuntimeDir = path.join(
-  path.dirname(_require.resolve("@midnight-ntwrk/compact-runtime/package.json")),
-  "dist",
-);
-// object-inspect is a nested dep of compact-runtime — resolve from its own scope
-const compactRuntimeRequire = createRequire(
-  path.join(compactRuntimeDir, "runtime.js"),
-);
-const objectInspectPath = compactRuntimeRequire.resolve("object-inspect");
-// Resolve onchain-runtime browser entry explicitly (avoid Node's `node` condition)
+// Resolve onchain-runtime-v3 browser entry explicitly (avoid Node's `node` condition).
+// compact-runtime@0.15.0 is pure ESM and re-exports from onchain-runtime-v3.
+// In Bun's module layout, onchain-runtime-v3 is nested inside compact-runtime's
+// Bun cache scope, so locate it from compact-runtime's package.json:
+//   pkg/package.json -> pkg/ -> @midnight-ntwrk/ -> node_modules/
+const _crPkgPath = _require.resolve("@midnight-ntwrk/compact-runtime/package.json");
+const _crNodeModules = path.dirname(path.dirname(path.dirname(_crPkgPath)));
 const onchainRuntimeBrowserPath = path.join(
-  path.dirname(compactRuntimeRequire.resolve("@midnight-ntwrk/onchain-runtime")),
+  _crNodeModules,
+  "@midnight-ntwrk",
+  "onchain-runtime-v3",
   "midnight_onchain_runtime_wasm.js",
 );
 
@@ -30,113 +28,26 @@ const onchainRuntimeBrowserPath = path.join(
 // React CJS→ESM named export interop natively. All React packages have
 // needsInterop:true which makes Vite generate proxy modules with named exports.
 // The shim created a second React instance causing "Invalid hook call".
+// NOTE: compactRuntimeEsmShimPlugin was removed. compact-runtime@0.15.0 is pure
+// ESM and no longer requires a CJS→ESM shim. WASM loading is handled by
+// vite-plugin-wasm and optimizeDeps.exclude.
 /**
- * Virtual ESM shim for @midnight-ntwrk/compact-runtime.
+ * Virtual ESM shim for @midnight-ntwrk/onchain-runtime-v3.
  *
- * compact-runtime/dist/runtime.js is a CJS file with chained exports assignments
- * (exports.A = exports.B = void 0) that @rollup/plugin-commonjs cannot statically
- * analyse for named exports. This plugin intercepts the package import and inlines
- * all 4 CJS sub-files (version, utils, contract-dependencies, runtime) inside a
- * single IIFE, resolving the circular dependency between runtime ↔ contract-deps.
+ * onchain-runtime-v3 uses top-level await for WASM initialization which
+ * esbuild cannot handle. This plugin redirects the import to the explicit
+ * browser WASM entry point, bypassing the Node.js conditional export.
  */
-function compactRuntimeEsmShimPlugin(crDir: string, inspectPath: string, onchainRuntimePath: string): Plugin {
-  const COMPACT_RUNTIME_ID = "\0virtual:compact-runtime-shim";
-
-  const versionCode = fs.readFileSync(path.join(crDir, "version.js"), "utf-8");
-  const utilsCode = fs.readFileSync(path.join(crDir, "utils.js"), "utf-8");
-  const contractDepsCode = fs.readFileSync(path.join(crDir, "contract-dependencies.js"), "utf-8");
-  const runtimeCode = fs.readFileSync(path.join(crDir, "runtime.js"), "utf-8");
-  const inspectCode = fs.readFileSync(inspectPath, "utf-8");
+function onchainRuntimeV3ShimPlugin(onchainRuntimePath: string): Plugin {
+  const ONCHAIN_RUNTIME_V3_ID = "@midnight-ntwrk/onchain-runtime-v3";
 
   return {
-    name: "compact-runtime-esm-shim",
+    name: "onchain-runtime-v3-shim",
     enforce: "pre",
-    resolveId(id, importer) {
-      if (id === "@midnight-ntwrk/compact-runtime") return COMPACT_RUNTIME_ID;
-      // Help Rollup resolve @midnight-ntwrk/onchain-runtime when imported from
-      // the virtual module (which has no file-system base path)
-      if (id === "@midnight-ntwrk/onchain-runtime" && importer === COMPACT_RUNTIME_ID) {
+    resolveId(id) {
+      if (id === ONCHAIN_RUNTIME_V3_ID) {
         return onchainRuntimePath;
       }
-    },
-    load(id) {
-      if (id !== COMPACT_RUNTIME_ID) return;
-      return `
-import * as _onchainRuntime from "@midnight-ntwrk/onchain-runtime";
-
-// object-inspect (no external deps)
-var _inspectExports = {};
-(function(module, exports, require) {
-${inspectCode}
-})({ exports: _inspectExports }, _inspectExports, function(id) {
-  // util.inspect is only used for custom inspection symbols — stub it for browser
-  if (id === './util.inspect') { var f = function(){}; return f; }
-  throw new Error("[object-inspect-shim] Unknown module: " + id);
-});
-var _inspect = _inspectExports;
-
-// version.js
-var _versionExports = {};
-(function(exports) {
-${versionCode}
-})(_versionExports);
-
-// utils.js
-var _utilsExports = {};
-(function(exports) {
-${utilsCode}
-})(_utilsExports);
-
-// Pre-allocate shared exports objects to resolve the circular dependency:
-// runtime.js → contract-dependencies.js → runtime.js
-var _runtimeExports = {};
-var _contractDepsExports = {};
-
-// runtime.js (requires: ./version, ./contract-dependencies, @midnight-ntwrk/onchain-runtime, object-inspect)
-(function(exports, require) {
-${runtimeCode}
-})(_runtimeExports, function(moduleId) {
-  if (moduleId === "./version") return _versionExports;
-  if (moduleId === "./contract-dependencies") return _contractDepsExports;
-  if (moduleId === "@midnight-ntwrk/onchain-runtime") return _onchainRuntime;
-  if (moduleId === "object-inspect") return _inspect;
-  throw new Error("[compact-runtime-shim] Unknown module: " + moduleId);
-});
-
-// contract-dependencies.js (requires: ./runtime, ./utils)
-(function(exports, require) {
-${contractDepsCode}
-})(_contractDepsExports, function(moduleId) {
-  if (moduleId === "./runtime") return _runtimeExports;
-  if (moduleId === "./utils") return _utilsExports;
-  throw new Error("[compact-deps-shim] Unknown module: " + moduleId);
-});
-
-export const {
-  BooleanDescriptor, Bytes32Descriptor, CoinInfoDescriptor, CoinRecipientDescriptor,
-  CompactError, CompactTypeBoolean, CompactTypeBytes, CompactTypeCurvePoint,
-  CompactTypeEnum, CompactTypeField, CompactTypeMerkleTreeDigest,
-  CompactTypeMerkleTreePath, CompactTypeMerkleTreePathEntry, CompactTypeOpaqueString,
-  CompactTypeOpaqueUint8Array, CompactTypeUnsignedInteger, CompactTypeVector,
-  ContractAddressDescriptor, ContractMaintenanceAuthority, ContractOperation,
-  ContractState, CostModel, DUMMY_ADDRESS, MAX_FIELD, MaxUint8Descriptor, NetworkId,
-  QueryContext, QueryResults, StateBoundedMerkleTree, StateMap, StateValue,
-  VmResults, VmStack, ZswapCoinPublicKeyDescriptor,
-  addField, alignedConcat, assert, bigIntToValue, checkProofData, coinCommitment,
-  constructorContext, contractDependencies, convertBytesToField, convertBytesToUint,
-  convertFieldToBytes, createZswapInput, createZswapOutput, decodeCoinInfo,
-  decodeCoinPublicKey, decodeContractAddress, decodeQualifiedCoinInfo, decodeRecipient,
-  decodeTokenType, decodeZswapLocalState, degradeToTransient, dummyContractAddress,
-  ecAdd, ecMul, ecMulGenerator, emptyZswapLocalState, encodeCoinInfo, encodeCoinPublicKey,
-  encodeContractAddress, encodeQualifiedCoinInfo, encodeRecipient, encodeTokenType,
-  encodeZswapLocalState, hasCoinCommitment, hashToCurve, leafHash, maxAlignedSize,
-  mulField, ownPublicKey, persistentCommit, persistentHash, runProgram,
-  sampleContractAddress, sampleSigningKey, sampleTokenType, signData,
-  signatureVerifyingKey, subField, tokenType, transientCommit, transientHash,
-  type_error, upgradeFromTransient, valueToBigInt, verifySignature, versionString, witnessContext,
-} = _runtimeExports;
-export default _runtimeExports;
-`;
     },
   };
 }
@@ -300,7 +211,7 @@ export default _usse;
 export default defineConfig({
   plugins: [
     reactBuildShimPlugin(),
-    compactRuntimeEsmShimPlugin(compactRuntimeDir, objectInspectPath, onchainRuntimeBrowserPath),
+    onchainRuntimeV3ShimPlugin(onchainRuntimeBrowserPath),
     react(),
     tailwindcss(),
     wasm(),
@@ -321,13 +232,15 @@ export default defineConfig({
   },
   optimizeDeps: {
     // Exclude packages that esbuild cannot handle:
-    // - compact-runtime: CJS with require("@midnight-ntwrk/onchain-runtime") which loads WASM (TLA)
-    // - onchain-runtime: ESM that imports .wasm with top-level await
-    // level-private-state-provider is intentionally NOT excluded so esbuild can
-    // convert level/browser.js (CJS exports.Level = ...) to ESM named exports.
+    // - onchain-runtime-v3: ESM with top-level await for WASM initialization
+    // - onchain-runtime: legacy name (kept for safety)
+    // compact-runtime@0.15.0 IS pre-bundled by esbuild. Its import of
+    // onchain-runtime-v3 is marked external (excluded above), so esbuild
+    // doesn't try to process TLA. The shim plugin handles the import at
+    // request time, serving the browser WASM entry as native ESM.
     exclude: [
-      "@midnight-ntwrk/compact-runtime",
       "@midnight-ntwrk/onchain-runtime",
+      "@midnight-ntwrk/onchain-runtime-v3",
     ],
     // Pre-bundle the contract workspace package so esbuild can transform the
     // compiled Compact contract (managed/counter/contract/index.cjs) from CJS
@@ -345,6 +258,11 @@ export default defineConfig({
       "react/jsx-runtime",
       "react/jsx-dev-runtime",
     ],
+  },
+  define: {
+    // randombytes/browser.js and other Node.js polyfills use `global`
+    // which is not defined in the browser. Replace with globalThis.
+    global: "globalThis",
   },
   build: {
     target: "esnext",

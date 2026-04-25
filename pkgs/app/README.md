@@ -84,3 +84,20 @@ docker compose -f standalone.yml up -d
 
 現在、必須の環境変数はありません。  
 Indexer / Node の URI は Lace Wallet から自動取得し、取得できない場合は `src/utils/constants.ts` の `FALLBACK_URIS`（testnet-02）にフォールバックします。
+
+## コントラクトのアドレス
+
+PreProdにデプロイしたコントラクトアドレス
+
+```bash
+[15:58:30.712] INFO (37564): Deploying counter contract...
+  ⠋ Deploying counter contract[15:58:51.164] INFO (37564): Deployed contract at address: 64c73de16b1054f970e4decaa3372b99771a67c73c27d91cfd0aee35512349bf
+  ✓ Deploying counter contract
+  Contract deployed at: 64c73de16b1054f970e4decaa3372b99771a67c73c27d91cfd0aee35512349bf
+```
+
+ネットワークプレフィックスを入れる必要あり
+
+```bash
+020064c73de16b1054f970e4decaa3372b99771a67c73c27d91cfd0aee35512349bf
+```

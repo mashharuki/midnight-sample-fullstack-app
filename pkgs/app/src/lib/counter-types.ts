@@ -1,16 +1,15 @@
+import type { CompiledContract } from "@midnight-ntwrk/compact-js";
 import type {
   DeployedContract,
   FoundContract,
 } from "@midnight-ntwrk/midnight-js-contracts";
 import type {
-  ImpureCircuitId,
+  AnyProvableCircuitId,
   MidnightProviders,
 } from "@midnight-ntwrk/midnight-js-types";
-import { Counter, type CounterPrivateState } from "contract";
+import type { CounterPrivateState } from "contract";
 
-export type CounterCircuits = ImpureCircuitId<
-  Counter.Contract<CounterPrivateState>
->;
+export type CounterCircuits = AnyProvableCircuitId;
 
 export const CounterPrivateStateId = "counterPrivateState" as const;
 export type CounterProviders = MidnightProviders<
@@ -18,7 +17,11 @@ export type CounterProviders = MidnightProviders<
   typeof CounterPrivateStateId,
   CounterPrivateState
 >;
-export type CounterContract = Counter.Contract<CounterPrivateState>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CounterContract = CompiledContract.CompiledContract<any, CounterPrivateState>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type DeployedCounterContract =
-  | DeployedContract<CounterContract>
-  | FoundContract<CounterContract>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | DeployedContract<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | FoundContract<any>;

@@ -3,10 +3,10 @@ name: midnight-compact-guide
 description: Comprehensive guide to writing Compact smart contracts for Midnight Network. Use this skill when writing, reviewing, debugging, or learning Compact code. Triggers on "write a contract", "Compact syntax", "Midnight smart contract", "ledger state", "circuit function", or "ZK proof".
 license: MIT
 metadata:
-  author: webisoft
-  version: "2.1.0"
-  midnight-version: "0.27.0"
-  compact-version: "0.19+"
+  author: mashharuki
+  version: "2.2.0"
+  compact-toolchain-version: "0.30.0"
+  compact-version: "0.20+"
 ---
 
 # Midnight Compact Language Reference (v0.19+)
@@ -18,7 +18,7 @@ metadata:
 Use this as a starting point - it compiles successfully:
 
 ```compact
-pragma language_version >= 0.19;
+pragma language_version >= 0.20;
 
 import CompactStandardLibrary;
 

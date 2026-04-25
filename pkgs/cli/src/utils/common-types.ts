@@ -13,19 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { Counter, type CounterPrivateState } from "contract";
+import type { CompiledContract } from "@midnight-ntwrk/compact-js";
 import type {
-  ImpureCircuitId,
-  MidnightProviders,
-} from "@midnight-ntwrk/midnight-js-types";
-import type {
-  DeployedContract,
-  FoundContract,
+    DeployedContract,
+    FoundContract,
 } from "@midnight-ntwrk/midnight-js-contracts";
+import type {
+    AnyProvableCircuitId,
+    MidnightProviders,
+} from "@midnight-ntwrk/midnight-js-types";
+import { type CounterPrivateState } from "contract";
 
-export type CounterCircuits = ImpureCircuitId<
-  Counter.Contract<CounterPrivateState>
->;
+export type CounterCircuits = AnyProvableCircuitId;
 
 export const CounterPrivateStateId = "counterPrivateState";
 
@@ -35,8 +34,11 @@ export type CounterProviders = MidnightProviders<
   CounterPrivateState
 >;
 
-export type CounterContract = Counter.Contract<CounterPrivateState>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CounterContract = CompiledContract.CompiledContract<any, CounterPrivateState>;
 
 export type DeployedCounterContract =
-  | DeployedContract<CounterContract>
-  | FoundContract<CounterContract>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | DeployedContract<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | FoundContract<any>;

@@ -1,330 +1,391 @@
 ---
 name: midnight-sdk-guide
-description: TypeScript SDK integration guide for Midnight dApps. Use this skill when building frontends, connecting wallets, or calling contracts from TypeScript. Triggers on "SDK", "TypeScript", "wallet integration", "connect dApp", "call contract".
+description: >
+  TypeScript SDK integration guide for Midnight dApps — headless CLI and Node.js applications.
+  Use this skill when building CLIs, backends, or scripts that deploy/call contracts using
+  wallet-sdk-* packages (WalletFacade, DustWallet, HDWallet).
+  Triggers on: "SDK", "TypeScript", "wallet integration", "deploy contract", "call contract",
+  "WalletFacade", "DustWallet", "tNight", "DUST", "headless wallet", "configureProviders",
+  "midnight-js", "deployContract", "findDeployedContract", "CompiledContract".
+  Always use this skill when the user is writing a TypeScript Midnight app that is NOT a browser dApp.
 license: MIT
 metadata:
-  author: webisoft
-  version: "1.0.0"
-  midnight-version: "0.27.0"
+  author: mashharuki
+  version: "3.0.0"
+  midnight-js-version: "4.0.4"
+  wallet-sdk-facade-version: "3.0.0"
+  compact-runtime-version: "0.15.0"
+  reference: "midnightntwrk/example-counter"
 ---
 
-# Midnight TypeScript SDK Quick Reference
+# Midnight TypeScript SDK Guide (v4.x / wallet-sdk v3.x)
 
-Guide for integrating Midnight contracts with TypeScript applications.
+> **Source of truth**: `midnightntwrk/example-counter` — all patterns below are verified against this repo.
 
-## When to Use
-
-Reference this guide when:
-- Building a frontend for a Midnight dApp
-- Connecting the Lace wallet
-- Deploying or calling contracts from TypeScript
-- Handling errors from the SDK
-- Building transaction flows
+This guide covers **headless (Node.js/CLI) Midnight applications** using `wallet-sdk-facade`.
+For browser + Lace Wallet integration, see the `midnight-lace-dapp` skill instead.
 
 ---
 
-## Installation
+## 1. Package Dependencies
 
 ```bash
-npm install @midnight-ntwrk/midnight-js-contracts
+npm install \
+  @midnight-ntwrk/midnight-js@^4.0.4 \
+  @midnight-ntwrk/midnight-js-http-client-proof-provider@^4.0.4 \
+  @midnight-ntwrk/midnight-js-indexer-public-data-provider@^4.0.4 \
+  @midnight-ntwrk/midnight-js-level-private-state-provider@^4.0.4 \
+  @midnight-ntwrk/midnight-js-node-zk-config-provider@^4.0.4 \
+  @midnight-ntwrk/compact-runtime@0.15.0 \
+  @midnight-ntwrk/compact-js \
+  @midnight-ntwrk/ledger-v8@^8.0.0 \
+  @midnight-ntwrk/wallet-sdk-facade@^3.0.0 \
+  @midnight-ntwrk/wallet-sdk-dust-wallet@^3.0.0 \
+  @midnight-ntwrk/wallet-sdk-hd@^3.0.0 \
+  @midnight-ntwrk/wallet-sdk-shielded@^2.0.0 \
+  @midnight-ntwrk/wallet-sdk-unshielded-wallet@^2.0.0 \
+  @midnight-ntwrk/wallet-sdk-address-format@^3.0.0 \
+  rxjs ws pino
 ```
 
 ---
 
-## Core Types
-
-### Contract Deployment
+## 2. Network Configuration
 
 ```typescript
-import { deployContract, ContractDeployment } from '@midnight-ntwrk/midnight-js-contracts';
+import { setNetworkId } from '@midnight-ntwrk/midnight-js/network-id';
 
-const deployment: ContractDeployment = await deployContract({
-  contract: compiledContract,
-  privateState: initialPrivateState,
-  args: constructorArgs,
-});
-
-const { contractAddress, initialState } = deployment;
+// Call once at startup before any SDK operations
+setNetworkId('preprod');    // Preprod testnet (recommended)
+setNetworkId('preview');    // Preview testnet
+setNetworkId('undeployed'); // Standalone local (Docker)
 ```
 
-### Contract Interaction
+| Network | NetworkId | Indexer HTTP | Indexer WS |
+|---------|-----------|--------------|------------|
+| Preprod | `'preprod'` | `https://indexer.preprod.midnight.network/api/v3/graphql` | `wss://indexer.preprod.midnight.network/api/v3/graphql/ws` |
+| Preview | `'preview'` | `https://indexer.preview.midnight.network/api/v3/graphql` | `wss://indexer.preview.midnight.network/api/v3/graphql/ws` |
+| Standalone | `'undeployed'` | `http://127.0.0.1:8088/api/v3/graphql` | `ws://127.0.0.1:8088/api/v3/graphql/ws` |
+
+Node RPC:
+- Preprod: `https://rpc.preprod.midnight.network`
+- Preview: `https://rpc.preview.midnight.network`
+- Standalone: `http://127.0.0.1:9944`
+
+---
+
+## 3. Contract Types Setup
 
 ```typescript
-import { callContract } from '@midnight-ntwrk/midnight-js-contracts';
+import { Counter, type CounterPrivateState } from '@midnight-ntwrk/counter-contract';
+import type { MidnightProviders } from '@midnight-ntwrk/midnight-js/types';
+import type { DeployedContract, FoundContract } from '@midnight-ntwrk/midnight-js/contracts';
+import type { ProvableCircuitId } from '@midnight-ntwrk/compact-js';
 
-// Call a circuit
-const result = await callContract({
-  contractAddress,
-  circuitName: 'increment',
-  args: [amount],
-  privateState: currentPrivateState,
-});
-
-// Result contains new state and return value
-const { newPrivateState, returnValue, proof } = result;
-```
-
-### Providers
-
-```typescript
-import {
-  MidnightProvider,
-  createMidnightProvider
-} from '@midnight-ntwrk/midnight-js-contracts';
-
-const provider = await createMidnightProvider({
-  indexer: 'https://indexer.testnet.midnight.network',
-  node: 'https://node.testnet.midnight.network',
-  proofServer: 'https://prover.testnet.midnight.network',
-});
+// Types derived from the compiled contract
+export type MyCircuits = ProvableCircuitId<Counter.Contract<CounterPrivateState>>;
+export const MyPrivateStateId = 'myPrivateState';
+export type MyProviders = MidnightProviders<MyCircuits, typeof MyPrivateStateId, CounterPrivateState>;
+export type DeployedMyContract = DeployedContract<Counter.Contract<CounterPrivateState>>
+  | FoundContract<Counter.Contract<CounterPrivateState>>;
 ```
 
 ---
 
-## State Management
+## 4. CompiledContract — Pre-compile ZK Assets
 
 ```typescript
-interface ContractState<T> {
-  publicState: PublicState;
-  privateState: T;
-}
+import { CompiledContract } from '@midnight-ntwrk/compact-js';
+import { Counter, witnesses } from '@midnight-ntwrk/counter-contract';
+import path from 'node:path';
 
-// Subscribe to state changes
-provider.subscribeToContract(contractAddress, (state) => {
-  console.log('New state:', state);
-});
+const zkConfigPath = path.resolve(currentDir, '..', 'contract', 'src', 'managed', 'counter');
+
+// Build the compiled contract once (run at module load time, not per-deploy)
+const compiledContract = CompiledContract.make('counter', Counter.Contract).pipe(
+  CompiledContract.withVacantWitnesses,
+  CompiledContract.withCompiledFileAssets(zkConfigPath),
+);
 ```
 
 ---
 
-## Transaction Building
+## 5. Wallet Setup (WalletFacade)
+
+The Midnight headless wallet uses three sub-wallets derived from a single HD seed.
+
+### Key derivation from seed
 
 ```typescript
-import { buildTransaction } from '@midnight-ntwrk/midnight-js-contracts';
+import { HDWallet, Roles, generateRandomSeed } from '@midnight-ntwrk/wallet-sdk-hd';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { Buffer } from 'buffer';
 
-const tx = await buildTransaction({
-  contractAddress,
-  circuitName: 'transfer',
-  args: [recipient, amount],
-  privateState,
-});
-
-// Sign and submit
-const signedTx = await wallet.signTransaction(tx);
-const txHash = await provider.submitTransaction(signedTx);
-```
-
----
-
-## Wallet Integration
-
-### Browser Detection
-
-```typescript
-declare global {
-  interface Window {
-    midnight?: {
-      mnLace?: MidnightProvider;
-    };
-  }
-}
-
-function isWalletAvailable(): boolean {
-  return typeof window !== 'undefined'
-    && window.midnight?.mnLace !== undefined;
-}
-```
-
-### DApp Connector API
-
-```typescript
-interface DAppConnectorAPI {
-  enable(): Promise<MidnightAPI>;
-  isEnabled(): Promise<boolean>;
-  apiVersion(): string;
-  name(): string;
-  icon(): string;
-}
-
-async function connectWallet(): Promise<MidnightAPI> {
-  if (!window.midnight?.mnLace) {
-    throw new Error('Midnight Lace wallet not found');
-  }
-  return await window.midnight.mnLace.enable();
-}
-```
-
-### MidnightAPI Interface
-
-```typescript
-interface MidnightAPI {
-  getUsedAddresses(): Promise<string[]>;
-  getBalance(): Promise<Balance>;
-  signTx(tx: Transaction): Promise<SignedTransaction>;
-  submitTx(signedTx: SignedTransaction): Promise<TxHash>;
-  signData(address: string, payload: string): Promise<Signature>;
-}
-```
-
-### React Hook
-
-```typescript
-export function useWallet() {
-  const [state, setState] = useState({
-    isConnected: false,
-    address: null as string | null,
-    isLoading: false,
-    error: null as string | null,
-  });
-
-  const connect = useCallback(async () => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-    try {
-      if (!window.midnight?.mnLace) {
-        throw new Error('Please install Midnight Lace wallet');
-      }
-      const api = await window.midnight.mnLace.enable();
-      const addresses = await api.getUsedAddresses();
-      setState({
-        isConnected: true,
-        address: addresses[0] || null,
-        isLoading: false,
-        error: null,
-      });
-      return api;
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed',
-      }));
-      throw error;
-    }
-  }, []);
-
-  return { ...state, connect };
-}
-```
-
-### Connection Flow
-
-```
-1. User clicks "Connect Wallet"
-2. DApp calls window.midnight.mnLace.enable()
-3. Wallet popup asks user to approve
-4. User approves → DApp receives MidnightAPI
-5. DApp can now interact with wallet
-```
-
----
-
-## Error Handling
-
-```typescript
-import { MidnightError, ContractError } from '@midnight-ntwrk/midnight-js-contracts';
-
-try {
-  await callContract({ ... });
-} catch (error) {
-  if (error instanceof ContractError) {
-    console.error('Contract assertion failed:', error.message);
-  } else if (error instanceof MidnightError) {
-    console.error('Network error:', error.code);
-  }
-}
-```
-
-### DApp Connector Errors
-
-```typescript
-import { ErrorCodes } from '@midnight-ntwrk/dapp-connector-api';
-
-// ErrorCodes.Rejected - User rejected the request
-// ErrorCodes.InvalidRequest - Malformed transaction or request
-// ErrorCodes.InternalError - DApp connector couldn't process request
-
-try {
-  const api = await window.midnight.mnLace.enable();
-} catch (error) {
-  if (error.code === ErrorCodes.Rejected) {
-    console.log('User rejected wallet connection');
-  }
-}
-```
-
-### ContractTypeError
-
-```typescript
-// Thrown when there's a contract type mismatch
-try {
-  const contract = await findDeployedContract(provider, address, MyContract);
-} catch (e) {
-  if (e instanceof ContractTypeError) {
-    console.error('Contract type mismatch:', e.circuitIds);
-  }
-}
-```
-
----
-
-## Private State Witnesses
-
-TypeScript witnesses implement the Compact `witness` declarations:
-
-```typescript
-// counter-witnesses.ts
-import type { Witnesses } from './managed/counter';
-
-export type CounterPrivateState = {
-  localSecretKey: Uint8Array;
-  storedValues: Map<string, bigint>;
+const deriveKeysFromSeed = (seed: string) => {
+  const hdWallet = HDWallet.fromSeed(Buffer.from(seed, 'hex'));
+  if (hdWallet.type !== 'seedOk') throw new Error('Bad seed');
+  const result = hdWallet.hdWallet
+    .selectAccount(0)
+    .selectRoles([Roles.Zswap, Roles.NightExternal, Roles.Dust])
+    .deriveKeysAt(0);
+  if (result.type !== 'keysDerived') throw new Error('Key derivation failed');
+  hdWallet.hdWallet.clear();
+  return result.keys;
 };
 
-export const createWitnesses = (
-  state: CounterPrivateState
-): Witnesses<CounterPrivateState> => ({
-  local_secret_key: () => state.localSecretKey,
+// Generate a new random seed
+const seed = toHex(Buffer.from(generateRandomSeed()));
+```
 
-  store_secret_value: (value: bigint) => {
-    state.storedValues.set('secret', value);
-    return undefined; // returns []
-  },
+### WalletFacade initialization
 
-  get_secret_value: () => {
-    return state.storedValues.get('secret') ?? 0n;
+```typescript
+import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { createKeystore, InMemoryTransactionHistoryStorage, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { getNetworkId } from '@midnight-ntwrk/midnight-js/network-id';
+
+const keys = deriveKeysFromSeed(seed);
+const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(keys[Roles.Zswap]);
+const dustSecretKey = ledger.DustSecretKey.fromSeed(keys[Roles.Dust]);
+const unshieldedKeystore = createKeystore(keys[Roles.NightExternal], getNetworkId());
+
+const walletConfig = {
+  // Shielded (ZSwap)
+  networkId: getNetworkId(),
+  indexerClientConnection: { indexerHttpUrl: config.indexer, indexerWsUrl: config.indexerWS },
+  provingServerUrl: new URL(config.proofServer),
+  relayURL: new URL(config.node.replace(/^http/, 'ws')),
+  // Unshielded
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+  // Dust
+  costParameters: {
+    additionalFeeOverhead: 300_000_000_000_000n,
+    feeBlocksMargin: 5,
   },
+};
+
+const wallet = await WalletFacade.init({
+  configuration: walletConfig,
+  shielded: (cfg) => ShieldedWallet(cfg).startWithSecretKeys(shieldedSecretKeys),
+  unshielded: (cfg) => UnshieldedWallet(cfg).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
+  dust: (cfg) => DustWallet(cfg).startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
+});
+await wallet.start(shieldedSecretKeys, dustSecretKey);
+```
+
+### Wait for wallet sync
+
+```typescript
+import * as Rx from 'rxjs';
+
+const syncedState = await Rx.firstValueFrom(
+  wallet.state().pipe(
+    Rx.throttleTime(5_000),
+    Rx.filter((s) => s.isSynced),
+  ),
+);
+```
+
+---
+
+## 6. Configure Providers
+
+```typescript
+import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
+import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
+import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
+import { NodeZkConfigProvider } from '@midnight-ntwrk/midnight-js-node-zk-config-provider';
+
+export const configureProviders = async (ctx: WalletContext, config: Config) => {
+  const walletAndMidnightProvider = await createWalletAndMidnightProvider(ctx);
+  const zkConfigProvider = new NodeZkConfigProvider<MyCircuits>(zkConfigPath);
+  const accountId = walletAndMidnightProvider.getCoinPublicKey();
+  const storagePassword = `${Buffer.from(accountId, 'hex').toString('base64')}!`;
+
+  return {
+    privateStateProvider: levelPrivateStateProvider<typeof MyPrivateStateId>({
+      privateStateStoreName: 'my-private-state',
+      accountId,
+      privateStoragePasswordProvider: () => storagePassword,
+    }),
+    publicDataProvider: indexerPublicDataProvider(config.indexer, config.indexerWS),
+    zkConfigProvider,
+    proofProvider: httpClientProofProvider(config.proofServer, zkConfigProvider),
+    walletProvider: walletAndMidnightProvider,
+    midnightProvider: walletAndMidnightProvider,
+  };
+};
+```
+
+---
+
+## 7. WalletProvider + MidnightProvider Bridge
+
+```typescript
+import type { FinalizedTxData, MidnightProvider, WalletProvider } from '@midnight-ntwrk/midnight-js/types';
+
+export const createWalletAndMidnightProvider = async (
+  ctx: WalletContext,
+): Promise<WalletProvider & MidnightProvider> => {
+  const state = await Rx.firstValueFrom(ctx.wallet.state().pipe(Rx.filter((s) => s.isSynced)));
+  return {
+    getCoinPublicKey() {
+      return state.shielded.coinPublicKey.toHexString();
+    },
+    getEncryptionPublicKey() {
+      return state.shielded.encryptionPublicKey.toHexString();
+    },
+    async balanceTx(tx, ttl?) {
+      const recipe = await ctx.wallet.balanceUnboundTransaction(
+        tx,
+        { shieldedSecretKeys: ctx.shieldedSecretKeys, dustSecretKey: ctx.dustSecretKey },
+        { ttl: ttl ?? new Date(Date.now() + 30 * 60 * 1000) },
+      );
+      // Sign unshielded intents manually (wallet SDK bug workaround)
+      const signFn = (payload: Uint8Array) => ctx.unshieldedKeystore.signData(payload);
+      signTransactionIntents(recipe.baseTransaction, signFn, 'proof');
+      if (recipe.balancingTransaction) {
+        signTransactionIntents(recipe.balancingTransaction, signFn, 'pre-proof');
+      }
+      return ctx.wallet.finalizeRecipe(recipe);
+    },
+    submitTx(tx) {
+      return ctx.wallet.submitTransaction(tx) as any;
+    },
+  };
+};
+```
+
+> **Note**: The `signTransactionIntents` helper is needed to work around a known wallet SDK bug where `signRecipe` hardcodes the wrong proof marker (`'pre-proof'` instead of `'proof'`). See `api.ts` in `example-counter` for the full implementation.
+
+---
+
+## 8. Deploy a Contract
+
+```typescript
+import { deployContract } from '@midnight-ntwrk/midnight-js/contracts';
+
+const deployedContract = await deployContract(providers, {
+  compiledContract,         // from CompiledContract.make().pipe(...)
+  privateStateId: 'myPrivateState',
+  initialPrivateState: { privateCounter: 0 },
 });
 
-export const createInitialState = (): CounterPrivateState => ({
-  localSecretKey: crypto.getRandomValues(new Uint8Array(32)),
-  storedValues: new Map(),
+const contractAddress = deployedContract.deployTxData.public.contractAddress;
+console.log(`Deployed at: ${contractAddress}`);
+```
+
+---
+
+## 9. Join an Existing Contract
+
+```typescript
+import { findDeployedContract } from '@midnight-ntwrk/midnight-js/contracts';
+
+const deployedContract = await findDeployedContract(providers, {
+  contractAddress,           // string or ContractAddress
+  compiledContract,
+  privateStateId: 'myPrivateState',
+  initialPrivateState: { privateCounter: 0 },
 });
 ```
 
 ---
 
-## Best Practices
+## 10. Call a Circuit (Write Transaction)
 
-1. **Always check wallet availability** before connecting
-2. **Handle user rejection** gracefully
-3. **Store connection state** in context/global state
-4. **Provide clear loading/error feedback**
-5. **Test with Midnight Lace extension**
-6. **Keep private state secure** - never log or expose it
+```typescript
+// Calls increment() → proves → balances → submits → returns FinalizedTxData
+const finalizedTxData = await deployedContract.callTx.increment();
+console.log(`TX ${finalizedTxData.public.txId} in block ${finalizedTxData.public.blockHeight}`);
+```
 
 ---
 
-## Rules
+## 11. Query Public Ledger State
 
-See `/rules/` directory for detailed documentation:
-- `wallet-integration.md` - Complete wallet integration patterns
-- `error-handling.md` - Error handling best practices
+```typescript
+import { assertIsContractAddress } from '@midnight-ntwrk/midnight-js/utils';
+
+assertIsContractAddress(contractAddress);
+const contractState = await providers.publicDataProvider.queryContractState(contractAddress);
+if (contractState != null) {
+  const ledgerState = Counter.ledger(contractState.data);
+  console.log(`Counter: ${ledgerState.round}`);
+}
+```
+
+---
+
+## 12. DUST (Fee Token) Flow
+
+DUST is the non-transferable fee resource on Midnight. You must:
+1. Receive **tNight** tokens (from faucet) into the unshielded wallet
+2. **Register** the NIGHT UTXOs for dust generation (one-time on-chain tx)
+3. **Wait** for DUST to generate (takes a few minutes)
+4. Only then can you deploy/call contracts
+
+```typescript
+import { unshieldedToken } from '@midnight-ntwrk/ledger-v8';
+
+// Check DUST balance
+const state = await Rx.firstValueFrom(wallet.state().pipe(Rx.filter((s) => s.isSynced)));
+const dustBalance = state.dust.balance(new Date());
+const nightBalance = state.unshielded.balances[unshieldedToken().raw] ?? 0n;
+
+// Register NIGHT UTXOs for dust generation
+const nightUtxos = state.unshielded.availableCoins;
+const recipe = await wallet.registerNightUtxosForDustGeneration(
+  nightUtxos,
+  unshieldedKeystore.getPublicKey(),
+  (payload) => unshieldedKeystore.signData(payload),
+);
+const finalized = await wallet.finalizeRecipe(recipe);
+await wallet.submitTransaction(finalized);
+```
+
+---
+
+## 13. Node.js WebSocket Setup
+
+```typescript
+import { WebSocket } from 'ws';
+
+// Required for GraphQL subscriptions (wallet sync) to work in Node.js
+// @ts-expect-error: enables WebSocket through Apollo
+globalThis.WebSocket = WebSocket;
+```
+
+---
+
+## 14. Common Types Reference
+
+```typescript
+import type { ContractAddress } from '@midnight-ntwrk/compact-runtime';
+import type { FinalizedTxData } from '@midnight-ntwrk/midnight-js/types';
+import type { DeployedContract, FoundContract } from '@midnight-ntwrk/midnight-js/contracts';
+import type { ProvableCircuitId } from '@midnight-ntwrk/compact-js';
+```
+
+---
+
+## 15. Troubleshooting
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Failed to clone intent` | wallet SDK signing bug | Use `signTransactionIntents` workaround (see api.ts) |
+| `connect ECONNREFUSED 127.0.0.1:6300` | Proof server not running | `docker compose -f proof-server.yml up` |
+| `Cannot find module` test errors | Contract not built | `cd contract && npm run compact && npm run build` |
+| DUST balance 0 after failed deploy | Locked pending coins | Restart the app to release locked DUST |
+| `isSynced` never true | WebSocket not polyfilled | Add `globalThis.WebSocket = WebSocket` (ws package) |
 
 ---
 
 ## References
 
-- [Midnight Docs](https://docs.midnight.network)
-- [TypeScript SDK](https://docs.midnight.network/develop/reference/sdk)
-- [DApp Connector API](https://github.com/midnightntwrk/midnight-dapp-connector-api)
-- [Lace Wallet](https://www.lace.io)
+- [Midnight Docs](https://docs.midnight.network/)
+- [example-counter source](https://github.com/midnightntwrk/example-counter)
+- [Compact Language Guide](https://docs.midnight.network/compact)
+- Preprod Faucet: `https://faucet.preprod.midnight.network/`

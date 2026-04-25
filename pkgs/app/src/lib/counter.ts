@@ -1,8 +1,8 @@
+import * as CompactJs from "@midnight-ntwrk/compact-js";
 import type { ContractAddress } from "@midnight-ntwrk/compact-runtime";
 import { findDeployedContract } from "@midnight-ntwrk/midnight-js-contracts";
 import { assertIsContractAddress } from "@midnight-ntwrk/midnight-js-utils";
-import type { CounterPrivateState } from "contract";
-import { Counter, witnesses } from "contract";
+import { Counter, type CounterPrivateState } from "contract";
 import * as Rx from "rxjs";
 import type {
   CounterContract,
@@ -11,8 +11,13 @@ import type {
 } from "./counter-types";
 import { CounterPrivateStateId } from "./counter-types";
 
-export const counterContractInstance: CounterContract =
-  new Counter.Contract<CounterPrivateState>(witnesses);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const counterContractInstance: CounterContract = (CompactJs.CompiledContract.make(
+  "counter",
+  Counter.Contract as any,
+) as any).pipe(
+  CompactJs.CompiledContract.withVacantWitnesses,
+);
 
 const INITIAL_PRIVATE_STATE: CounterPrivateState = { privateCounter: 0 };
 
@@ -24,10 +29,10 @@ export const joinCounterContract = async (
   contractAddress: string,
 ): Promise<DeployedCounterContract> => {
   return findDeployedContract(
-    providers as Parameters<typeof findDeployedContract>[0],
+    providers,
     {
+      compiledContract: counterContractInstance,
       contractAddress: contractAddress as ContractAddress,
-      contract: counterContractInstance,
       privateStateId: CounterPrivateStateId,
       initialPrivateState: INITIAL_PRIVATE_STATE,
     },
@@ -41,7 +46,8 @@ export const incrementCounter = async (
   counterContract: DeployedCounterContract,
 ): Promise<void> => {
   // increment() を呼び出してトランザクションを送信
-  await counterContract.callTx.increment();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (counterContract as any).callTx.increment();
 };
 
 /**
@@ -57,7 +63,7 @@ export const getCounterValue = async (
     contractAddress,
   );
   return contractState != null
-    ? Counter.ledger(contractState.data).round
+    ? Counter.ledger(contractState.data as any).round
     : null;
 };
 
@@ -71,6 +77,6 @@ export const subscribeToCounterState = (
   return providers.publicDataProvider
     .contractStateObservable(contractAddress, { type: "latest" })
     .pipe(
-      Rx.map((contractState) => Counter.ledger(contractState.data).round),
+      Rx.map((contractState) => Counter.ledger(contractState.data as any).round),
     );
 };
