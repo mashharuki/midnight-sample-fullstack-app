@@ -50,11 +50,21 @@ export function useCounter(): UseCounterResult {
   const [error, setError] = useState<string | null>(null);
   const subscriptionRef = useRef<Subscription | null>(null);
 
+  /**
+   * コントラクトアドレスを更新する関数。
+   * 状態とローカルストレージの両方を更新する。
+   */
   const setContractAddress = useCallback((addr: string) => {
     setContractAddressState(addr);
     localStorage.setItem(STORAGE_KEY, addr);
   }, []);
 
+  /**
+   * 指定したコントラクトアドレスに接続する関数。providers が必要。
+   * 接続中は状態を "joining" にしてエラーをリセット。
+   * 接続成功時は deployedContract と contractAddress を状態にセットし、サブスクリプションを開始してカウンター値をリアルタイム更新。
+   * 接続失敗時は状態を "error" にしてエラーメッセージをセット。
+   */
   const join = useCallback(
     async (addr: string) => {
       if (!providers) return;
@@ -69,6 +79,7 @@ export function useCounter(): UseCounterResult {
 
         // 既存サブスクリプションを破棄してから新規購読
         subscriptionRef.current?.unsubscribe();
+        // subscribeToCounterState は Observable を返すので購読して状態を更新
         subscriptionRef.current = subscribeToCounterState(
           providers,
           addr as ContractAddress,

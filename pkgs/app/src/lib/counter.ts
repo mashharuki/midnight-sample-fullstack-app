@@ -11,6 +11,7 @@ import type {
 } from "./counter-types";
 import { CounterPrivateStateId } from "./counter-types";
 
+// Counter コントラクトのコンパイル済みインスタンスを生成。型アサーションで CounterContract として扱う。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const counterContractInstance: CounterContract = (CompactJs.CompiledContract.make(
   "counter",
@@ -23,6 +24,10 @@ const INITIAL_PRIVATE_STATE: CounterPrivateState = { privateCounter: 0 };
 
 /**
  * 既存コントラクトに接続する。
+ * @param providers CounterProviders（プロバイダのセット）
+ * @param contractAddress 接続するコントラクトのアドレス
+ * @returns DeployedCounterContract（接続されたコントラクトのインスタンス）
+ * @throws コントラクトが見つからない、接続に失敗した場合などにエラーをスロー
  */
 export const joinCounterContract = async (
   providers: CounterProviders,
@@ -41,6 +46,7 @@ export const joinCounterContract = async (
 
 /**
  * カウンター値をインクリメントする。トランザクションがファイナライズされるまで待機する。
+ * @param counterContract DeployedCounterContract（インクリメント対象のコントラクト）
  */
 export const incrementCounter = async (
   counterContract: DeployedCounterContract,
@@ -52,6 +58,10 @@ export const incrementCounter = async (
 
 /**
  * 現在のカウンター値を1回取得する（単発クエリ）。
+ * @param providers CounterProviders（プロバイダのセット）
+ * @param contractAddress クエリ対象のコントラクトアドレス
+ * @returns 現在のカウンター値（bigint）。コントラクトが見つからない場合は null。
+ * @throws クエリに失敗した場合などにエラーをスロー
  */
 export const getCounterValue = async (
   providers: CounterProviders,
@@ -68,12 +78,17 @@ export const getCounterValue = async (
 };
 
 /**
- * コントラクト状態の変更を Observable で監視する。
+ * コントラクト状態の変更を Observable で監視するメソッド
+ * @param providers CounterProviders（プロバイダのセット）
+ * @param contractAddress 監視対象のコントラクトアドレス
+ * @returns カウンター値の変更をリアルタイムで受け取る Observable。コントラクトが見つからない場合はエラーをスロー。
+ * @throws コントラクトが見つからない、購読に失敗した場合などにエラーをスロー
  */
 export const subscribeToCounterState = (
   providers: CounterProviders,
   contractAddress: ContractAddress,
 ): Rx.Observable<bigint> => {
+  // コントラクトアドレスの形式を検証
   return providers.publicDataProvider
     .contractStateObservable(contractAddress, { type: "latest" })
     .pipe(
