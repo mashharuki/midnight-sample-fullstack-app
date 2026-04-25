@@ -1,3 +1,4 @@
+import { FALLBACK_URIS } from "@/utils/constants";
 import type { WalletConnectionResult } from "@/utils/types";
 import {
   type CoinPublicKey,
@@ -11,10 +12,10 @@ import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
 import { levelPrivateStateProvider } from "@midnight-ntwrk/midnight-js-level-private-state-provider";
 import { getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
-import {
-  type MidnightProvider,
-  type UnboundTransaction,
-  type WalletProvider,
+import type {
+  MidnightProvider,
+  UnboundTransaction,
+  WalletProvider,
 } from "@midnight-ntwrk/midnight-js-types";
 import {
   NetworkId as ZswapNetworkId,
@@ -45,6 +46,13 @@ export function createCounterProviders(
   const { wallet, uris, state } = connection;
   const networkId = toZswapNetworkId(getNetworkId());
 
+  // Cache the proved ZSwap transaction from balanceTx so submitTx can use it
+  // directly. LedgerTransaction.serialize() produces ledger-v8 format bytes that
+  // start with byte 109, which ZswapTransaction.deserialize() rejects as an
+  // unknown network ID. By preserving the original ZSwap Transaction object we
+  // skip the broken serialize/deserialize round-trip entirely.
+  let latestProvedZswapTx: ZswapTransaction | null = null;
+
   const walletProvider: WalletProvider = {
     getCoinPublicKey(): CoinPublicKey {
       return state.coinPublicKey;
@@ -54,13 +62,14 @@ export function createCounterProviders(
     },
     async balanceTx(
       tx: UnboundTransaction,
-      _ttl?: Date,
+      _ttl?: Date | undefined,
     ): Promise<FinalizedTransaction> {
       const zswapTx = ZswapTransaction.deserialize(tx.serialize(), networkId);
       const provedZswapTx = await wallet.balanceAndProveTransaction(
         zswapTx,
         [],
       );
+      latestProvedZswapTx = provedZswapTx;
       const bytes = provedZswapTx.serialize(networkId);
       return LedgerTransaction.deserialize(
         "signature",
@@ -72,8 +81,14 @@ export function createCounterProviders(
   };
 
   const midnightProvider: MidnightProvider = {
-    async submitTx(tx: FinalizedTransaction): Promise<TransactionId> {
-      const zswapTx = ZswapTransaction.deserialize(tx.serialize(), networkId);
+    async submitTx(_tx: FinalizedTransaction): Promise<TransactionId> { // eslint-disable-line @typescript-eslint/no-unused-vars
+      const zswapTx = latestProvedZswapTx;
+      latestProvedZswapTx = null;
+      if (!zswapTx) {
+        throw new Error(
+          "submitTx called without a prior balanceTx – no ZSwap transaction cached",
+        );
+      }
       return wallet.submitTransaction(zswapTx) as Promise<TransactionId>;
     },
   };
@@ -82,6 +97,10 @@ export function createCounterProviders(
     `${window.location.origin}/managed/counter`,
     fetch.bind(window),
   );
+
+  // Force local Proof Server: Lace returns a remote preprod URL that blocks CORS from localhost
+  const proverServerUri = FALLBACK_URIS.proverServerUri;
+  console.log("[providers] Lace proverServerUri:", uris.proverServerUri, "→ using:", proverServerUri);
 
   return {
     privateStateProvider: levelPrivateStateProvider({
@@ -93,7 +112,7 @@ export function createCounterProviders(
       uris.indexerWsUri,
     ),
     zkConfigProvider,
-    proofProvider: httpClientProofProvider(uris.proverServerUri, zkConfigProvider),
+    proofProvider: httpClientProofProvider(proverServerUri, zkConfigProvider),
     walletProvider,
     midnightProvider,
   };
