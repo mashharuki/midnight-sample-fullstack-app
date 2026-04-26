@@ -152,7 +152,7 @@ CONTRACT_ADDRESS=           # デプロイ済みアドレス (インクリメン
 
 ## 📜 ライセンス
 
-Apache-2.0 - See [LICENSE](LICENSE) for details.
+MIT - See [LICENSE](LICENSE) for details.
 
 ---
 *Created by Gemini CLI Agent.*
