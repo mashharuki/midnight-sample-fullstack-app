@@ -12,6 +12,8 @@ import { useTranslation } from "react-i18next";
  */
 export function CounterSection() {
   const { t } = useTranslation();
+
+  // カウンターフックから状態とアクションを取得
   const {
     contractAddress,
     counterValue,

@@ -20,6 +20,7 @@ export const counterContractInstance: CounterContract = (CompactJs.CompiledContr
   CompactJs.CompiledContract.withVacantWitnesses,
 );
 
+// Counter コントラクトの初期プライベート状態を定義
 const INITIAL_PRIVATE_STATE: CounterPrivateState = { privateCounter: 0 };
 
 /**
@@ -33,6 +34,7 @@ export const joinCounterContract = async (
   providers: CounterProviders,
   contractAddress: string,
 ): Promise<DeployedCounterContract> => {
+  // コントラクトアドレスの形式を検証
   return findDeployedContract(
     providers,
     {
