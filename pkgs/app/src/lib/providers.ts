@@ -11,30 +11,13 @@ import { FetchZkConfigProvider } from "@midnight-ntwrk/midnight-js-fetch-zk-conf
 import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
 import { levelPrivateStateProvider } from "@midnight-ntwrk/midnight-js-level-private-state-provider";
-import { getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import type {
   MidnightProvider,
   UnboundTransaction,
   WalletProvider,
 } from "@midnight-ntwrk/midnight-js-types";
-import {
-  NetworkId as ZswapNetworkId,
-  Transaction as ZswapTransaction,
-} from "@midnight-ntwrk/zswap";
+import { fromHex, toHex } from "@midnight-ntwrk/midnight-js-utils";
 import type { CounterCircuits, CounterProviders } from "./counter-types";
-
-const toZswapNetworkId = (id: string): ZswapNetworkId => {
-  switch (id) {
-    case "TestNet":
-      return ZswapNetworkId.TestNet;
-    case "DevNet":
-      return ZswapNetworkId.DevNet;
-    case "MainNet":
-      return ZswapNetworkId.MainNet;
-    default:
-      return ZswapNetworkId.Undeployed;
-  }
-};
 
 /**
  * Midnight プロバイダーチェーンを生成する。
@@ -44,14 +27,11 @@ export function createCounterProviders(
   connection: WalletConnectionResult,
 ): CounterProviders {
   const { wallet, uris, state } = connection;
-  const networkId = toZswapNetworkId(getNetworkId());
-
-  // Cache the proved ZSwap transaction from balanceTx so submitTx can use it
-  // directly. LedgerTransaction.serialize() produces ledger-v8 format bytes that
-  // start with byte 109, which ZswapTransaction.deserialize() rejects as an
-  // unknown network ID. By preserving the original ZSwap Transaction object we
-  // skip the broken serialize/deserialize round-trip entirely.
-  let latestProvedZswapTx: ZswapTransaction | null = null;
+  // wallet-sdk-facade@3.0.0 exposes balanceUnsealedTransaction which accepts
+  // ledger-v8 hex-encoded bytes (first byte = 109). This replaces the broken
+  // ZSwap round-trip (ZswapTransaction.deserialize rejects byte 109 as unknown
+  // network ID). Cast to access the method not yet declared in dapp-connector-api@3.0.0 types.
+  const walletRaw = wallet as unknown as Record<string, unknown>;
 
   const walletProvider: WalletProvider = {
     getCoinPublicKey(): CoinPublicKey {
@@ -64,32 +44,35 @@ export function createCounterProviders(
       tx: UnboundTransaction,
       _ttl?: Date | undefined,
     ): Promise<FinalizedTransaction> {
-      const zswapTx = ZswapTransaction.deserialize(tx.serialize(), networkId);
-      const provedZswapTx = await wallet.balanceAndProveTransaction(
-        zswapTx,
-        [],
-      );
-      latestProvedZswapTx = provedZswapTx;
-      const bytes = provedZswapTx.serialize(networkId);
+      if (typeof walletRaw.balanceUnsealedTransaction !== "function") {
+        throw new Error(
+          "Lace wallet does not support balanceUnsealedTransaction. Please update Lace wallet.",
+        );
+      }
+      const hexTx = toHex(tx.serialize());
+      const result = await (
+        walletRaw.balanceUnsealedTransaction as (
+          tx: string,
+        ) => Promise<{ tx: string }>
+      )(hexTx);
       return LedgerTransaction.deserialize(
         "signature",
         "proof",
         "binding",
-        bytes,
+        new Uint8Array(fromHex(result.tx)),
       ) as FinalizedTransaction;
     },
   };
 
   const midnightProvider: MidnightProvider = {
-    async submitTx(_tx: FinalizedTransaction): Promise<TransactionId> { // eslint-disable-line @typescript-eslint/no-unused-vars
-      const zswapTx = latestProvedZswapTx;
-      latestProvedZswapTx = null;
-      if (!zswapTx) {
-        throw new Error(
-          "submitTx called without a prior balanceTx – no ZSwap transaction cached",
-        );
-      }
-      return wallet.submitTransaction(zswapTx) as Promise<TransactionId>;
+    async submitTx(tx: FinalizedTransaction): Promise<TransactionId> {
+      // Pass hex-encoded ledger-v8 bytes — the Lace bridge accepts a hex string at runtime
+      // even though the TypeScript interface (dapp-connector-api@3) still declares ZswapTransaction.
+      // TransactionId is read from tx.identifiers()[0] (not from the return value of submitTransaction).
+      await (walletRaw.submitTransaction as (tx: string) => Promise<void>)(
+        toHex(tx.serialize()),
+      );
+      return tx.identifiers()[0];
     },
   };
 
